@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Web Crawler{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Visão geral do sistema em tempo real{% endblock %}
+
+{% block content %}
+<div x-data="dashboard()" x-init="init()" x-cloak>
+
+    <!-- Atualização automática -->
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-2">
+            <div class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
+            <span class="text-xs text-gray-500">
+                Atualizado <span x-text="lastUpdate"></span>
+            </span>
+        </div>
+        <button @click="refresh()"
+                class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300
+                       px-3 py-1.5 rounded-lg transition-colors border border-gray-700">
+            <i class="fas fa-rotate-right mr-1.5" :class="loading ? 'animate-spin' : ''"></i>
+            Atualizar
+        </button>
+    </div>
+
+    <!-- Stats cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+        <!-- Páginas crawleadas -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-blue-800 transition-colors">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs text-gray-500 uppercase tracking-wider font-medium">
+                    Páginas
+                </span>
+                <div class="w-8 h-8 bg-blue-600/15 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-file-alt text-blue-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white mb-1"
+                 x-text="stats.processed !== undefined ? stats.processed : '—'"></div>
+            <div class="text-xs text-gray-500">Crawleadas com sucesso</div>
+        </div>
+
+        <!-- Ignoradas -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-yellow-800 transition-colors">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs text-gray-500 uppercase tracking-wider font-medium">
+                    Ignoradas
+                </span>
+                <div class="w-8 h-8 bg-yellow-600/15 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-forward text-yellow-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white mb-1"
+                 x-text="stats.skipped !== undefined ? stats.skipped : '—'"></div>
+            <div class="text-xs text-gray-500">Duplicatas detectadas</div>
+        </div>
+
+        <!-- Erros -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-red-800 transition-colors">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs text-gray-500 uppercase tracking-wider font-medium">
+                    Erros
+                </span>
+                <div class="w-8 h-8 bg-red-600/15 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-triangle-exclamation text-red-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white mb-1"
+                 x-text="stats.errors !== undefined ? stats.errors : '—'"></div>
+            <div class="text-xs text-gray-500">Falhas no fetch</div>
+        </div>
+
+        <!-- Bloom Filter -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-purple-800 transition-colors">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs text-gray-500 uppercase tracking-wider font-medium">
+                    Bloom Filter
+                </span>
+                <div class="w-8 h-8 bg-purple-600/15 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-filter text-purple-400 text-sm"></i>
+                </div>
+            </div>
+            <div class="text-3xl font-bold text-white mb-1"
+                 x-text="stats.bloom_size !== undefined ? stats.bloom_size : '—'"></div>
+            <div class="text-xs text-gray-500">URLs no filtro</div>
+        </div>
+    </div>
+
+    <!-- Segunda linha -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+
+        <!-- MongoDB -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div class="flex items-center gap-2.5 mb-5">
+                <div class="w-8 h-8 bg-green-600/15 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-database text-green-400 text-sm"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-semibold text-white">MongoDB</p>
+                    <p class="text-xs text-gray-500">Persistência</p>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Total de páginas</span>
+                    <span class="text-sm font-bold text-white"
+                          x-text="stats.mongo?.total_pages ?? '—'"></span>
+                </div>
+                <div class="w-full h-px bg-gray-800"></div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Domínios únicos</span>
+                    <span class="text-sm font-bold text-white"
+                          x-text="stats.mongo?.total_domains ?? '—'"></span>
+                </div>
+                <div class="w-full h-px bg-gray-800"></div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Erros salvos</span>
+                    <span class="text-sm font-bold text-white"
+                          x-text="stats.mongo?.total_errors ?? '—'"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- RabbitMQ -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div class="flex items-center gap-2.5 mb-5">
+                <div class="w-8 h-8 bg-orange-600/15 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-arrows-spin text-orange-400 text-sm"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-semibold text-white">RabbitMQ</p>
+                    <p class="text-xs text-gray-500">Fila de mensagens</p>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Publicadas</span>
+                    <span class="text-sm font-bold text-white"
+                          x-text="stats.queue?.published ?? '—'"></span>
+                </div>
+                <div class="w-full h-px bg-gray-800"></div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Consumidas</span>
+                    <span class="text-sm font-bold text-white"
+                          x-text="stats.queue?.consumed ?? '—'"></span>
+                </div>
+                <div class="w-full h-px bg-gray-800"></div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Confirmadas (ack)</span>
+                    <span class="text-sm font-bold text-white"
+                          x-text="stats.queue?.acked ?? '—'"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fetcher -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div class="flex items-center gap-2.5 mb-5">
+                <div class="w-8 h-8 bg-blue-600/15 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-cloud-arrow-down text-blue-400 text-sm"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-semibold text-white">Fetcher</p>
+                    <p class="text-xs text-gray-500">Download de páginas</p>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Sucesso</span>
+                    <span class="text-sm font-bold text-green-400"
+                          x-text="stats.fetcher?.fetched ?? '—'"></span>
+                </div>
+                <div class="w-full h-px bg-gray-800"></div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Falhas</span>
+                    <span class="text-sm font-bold text-red-400"
+                          x-text="stats.fetcher?.failed ?? '—'"></span>
+                </div>
+                <div class="w-full h-px bg-gray-800"></div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-gray-500">Taxa de sucesso</span>
+                    <span class="text-sm font-bold text-white"
+                          x-text="stats.fetcher?.success_rate ?? '—'"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terceira linha -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        <!-- Status do Crawler -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 bg-blue-600/15 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-spider text-blue-400 text-sm"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-white">Crawler</p>
+                        <p class="text-xs text-gray-500">Motor de crawling</p>
+                    </div>
+                </div>
+
+                <!-- Badge status -->
+                <div :class="crawlerRunning
+                        ? 'bg-green-500/10 text-green-400 border-green-800'
+                        : 'bg-gray-800 text-gray-500 border-gray-700'"
+                     class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs
+                            font-medium border">
+                    <div :class="crawlerRunning ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"
+                         class="w-1.5 h-1.5 rounded-full"></div>
+                    <span x-text="crawlerRunning ? 'Em execução' : 'Parado'"></span>
+                </div>
+            </div>
+
+            <!-- Crawler parado -->
+            <template x-if="!crawlerRunning">
+                <div class="flex flex-col items-center justify-center py-8 text-center">
+                    <div class="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mb-4">
+                        <i class="fas fa-spider text-gray-600 text-2xl"></i>
+                    </div>
+                    <p class="text-sm text-gray-400 mb-1">Crawler não está em execução</p>
+                    <p class="text-xs text-gray-600 mb-4">
+                        Inicie o crawler para começar a coletar páginas
+                    </p>
+                    <a href="/crawler"
+                       class="bg-blue-600 hover:bg-blue-700 text-white text-sm
+                              px-5 py-2 rounded-lg transition-colors font-medium">
+                        <i class="fas fa-play mr-2"></i>Iniciar Crawler
+                    </a>
+                </div>
+            </template>
+
+            <!-- Crawler rodando -->
+            <template x-if="crawlerRunning">
+                <div class="space-y-4">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Páginas processadas</span>
+                        <span class="text-white font-bold" x-text="stats.processed"></span>
+                    </div>
+                    <div class="w-full bg-gray-800 rounded-full h-2">
+                        <div class="bg-blue-600 h-2 rounded-full transition-all animate-pulse"
+                             style="width: 70%"></div>
+                    </div>
+                    <div class="flex justify-between text-xs text-gray-600">
+                        <span>Crawling em andamento...</span>
+                        <span x-text="`${stats.errors ?? 0} erros`"></span>
+                    </div>
+                    <div class="pt-2">
+                        <a href="/crawler"
+                           class="w-full block text-center bg-red-600/10 hover:bg-red-600/20
+                                  text-red-400 text-sm px-4 py-2 rounded-lg transition-colors
+                                  border border-red-900">
+                            <i class="fas fa-stop mr-2"></i>Parar Crawler
+                        </a>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Saúde dos Serviços -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div class="flex items-center gap-2.5 mb-5">
+                <div class="w-8 h-8 bg-red-600/15 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-heart-pulse text-red-400 text-sm"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-semibold text-white">Saúde dos Serviços</p>
+                    <p class="text-xs text-gray-500">Status em tempo real</p>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <template x-if="Object.keys(services).length === 0">
+                    <div class="flex items-center justify-center py-8">
+                        <i class="fas fa-rotate-right animate-spin text-gray-600 mr-2"></i>
+                        <span class="text-xs text-gray-500">Verificando serviços...</span>
+                    </div>
+                </template>
+
+                <template x-for="(svc, name) in services" :key="name">
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-gray-800/50
+                                border border-gray-800">
+                        <div class="flex items-center gap-3">
+                            <!-- Ícone por serviço -->
+                            <div class="w-7 h-7 rounded-md flex items-center justify-center"
+                                 :class="svc.status === 'ok' ? 'bg-green-600/15' : 'bg-red-600/15'">
+                                <i class="text-xs"
+                                   :class="{
+                                     'fas fa-database text-green-400': name === 'mongodb',
+                                     'fas fa-magnifying-glass text-yellow-400': name === 'elasticsearch',
+                                     'fas fa-arrows-spin text-orange-400': name === 'rabbitmq',
+                                     'fas fa-server': !['mongodb','elasticsearch','rabbitmq'].includes(name)
+                                   }"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-200 capitalize"
+                                   x-text="name"></p>
+                                <p class="text-xs text-gray-500"
+                                   x-text="svc.version ? `v${svc.version}` : svc.uri ?? ''"></p>
+                            </div>
+                        </div>
+                        <div :class="svc.status === 'ok'
+                                ? 'bg-green-500/10 text-green-400 border-green-900'
+                                : 'bg-red-500/10 text-red-400 border-red-900'"
+                             class="flex items-center gap-1.5 px-2.5 py-1 rounded-full
+                                    text-xs font-medium border">
+                            <div :class="svc.status === 'ok' ? 'bg-green-400' : 'bg-red-400'"
+                                 class="w-1.5 h-1.5 rounded-full"></div>
+                            <span x-text="svc.status === 'ok' ? 'Online' : 'Offline'"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function dashboard() {
+    return {
+        stats: {},
+        services: {},
+        crawlerRunning: false,
+        loading: false,
+        lastUpdate: '—',
+
+        async init() {
+            await this.refresh();
+            setInterval(() => this.refresh(), 10000);
+        },
+
+        async refresh() {
+            this.loading = true;
+            await Promise.all([this.fetchStats(), this.fetchHealth()]);
+            this.lastUpdate = new Date().toLocaleTimeString('pt-BR');
+            this.loading = false;
+        },
+
+        async fetchStats() {
+            try {
+                const res = await fetch('/api/v1/crawler/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                this.crawlerRunning = data.running;
+                if (data.stats) this.stats = data.stats;
+            } catch (e) {
+                console.error('Erro ao buscar stats:', e);
+            }
+        },
+
+        async fetchHealth() {
+            try {
+                const res = await fetch('/api/v1/health');
+                if (!res.ok) return;
+                const data = await res.json();
+                this.services = data.services;
+            } catch (e) {
+                console.error('Erro ao buscar health:', e);
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

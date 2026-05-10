@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Web Crawler{% endblock %}</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 500: '#3b82f6', 600: '#2563eb' }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+    <style>
+        [x-cloak] { display: none !important; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+    </style>
+
+    {% block head %}{% endblock %}
+</head>
+
+<body class="bg-gray-950 text-gray-100 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <aside class="w-60 bg-gray-900 border-r border-gray-800 flex flex-col fixed h-full z-10">
+
+        <!-- Logo -->
+        <div class="p-5 border-b border-gray-800">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/30">
+                    <i class="fas fa-spider text-white text-sm"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-white text-sm leading-tight">Web Crawler</h1>
+                    <p class="text-xs text-gray-500">Portfolio Project</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nav links -->
+        <nav class="flex-1 p-3 space-y-0.5">
+
+            <p class="text-xs text-gray-600 font-semibold uppercase tracking-widest px-3 pt-3 pb-1">
+                Geral
+            </p>
+
+            <a href="/"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm
+                      {% if active == 'dashboard' %}
+                        bg-blue-600 text-white shadow-lg shadow-blue-600/20
+                      {% else %}
+                        text-gray-400 hover:bg-gray-800 hover:text-white
+                      {% endif %}">
+                <i class="fas fa-chart-line w-4 text-center"></i>
+                <span class="font-medium">Dashboard</span>
+            </a>
+
+            <a href="/crawler"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm
+                      {% if active == 'crawler' %}
+                        bg-blue-600 text-white shadow-lg shadow-blue-600/20
+                      {% else %}
+                        text-gray-400 hover:bg-gray-800 hover:text-white
+                      {% endif %}">
+                <i class="fas fa-spider w-4 text-center"></i>
+                <span class="font-medium">Crawler</span>
+            </a>
+
+            <a href="/search"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm
+                      {% if active == 'search' %}
+                        bg-blue-600 text-white shadow-lg shadow-blue-600/20
+                      {% else %}
+                        text-gray-400 hover:bg-gray-800 hover:text-white
+                      {% endif %}">
+                <i class="fas fa-magnifying-glass w-4 text-center"></i>
+                <span class="font-medium">Busca</span>
+            </a>
+
+            <p class="text-xs text-gray-600 font-semibold uppercase tracking-widest px-3 pt-4 pb-1">
+                Sistema
+            </p>
+
+            <a href="/services"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm
+                      {% if active == 'services' %}
+                        bg-blue-600 text-white shadow-lg shadow-blue-600/20
+                      {% else %}
+                        text-gray-400 hover:bg-gray-800 hover:text-white
+                      {% endif %}">
+                <i class="fas fa-server w-4 text-center"></i>
+                <span class="font-medium">Serviços</span>
+            </a>
+
+        </nav>
+
+        <!-- Bottom -->
+        <div class="p-3 border-t border-gray-800 space-y-0.5">
+            <a href="/docs" target="_blank"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400
+                      hover:bg-gray-800 hover:text-white transition-all text-sm">
+                <i class="fas fa-book w-4 text-center"></i>
+                <span class="font-medium">API Docs</span>
+                <i class="fas fa-external-link-alt text-xs ml-auto opacity-50"></i>
+            </a>
+            <a href="https://github.com" target="_blank"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400
+                      hover:bg-gray-800 hover:text-white transition-all text-sm">
+                <i class="fab fa-github w-4 text-center"></i>
+                <span class="font-medium">GitHub</span>
+                <i class="fas fa-external-link-alt text-xs ml-auto opacity-50"></i>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="ml-60 flex-1 flex flex-col min-h-screen">
+
+        <!-- Top bar -->
+        <header class="bg-gray-900/80 backdrop-blur border-b border-gray-800 px-6 py-4
+                       flex items-center justify-between sticky top-0 z-10">
+            <div>
+                <h2 class="font-semibold text-white">
+                    {% block page_title %}Dashboard{% endblock %}
+                </h2>
+                <p class="text-xs text-gray-500">
+                    {% block page_subtitle %}Visão geral do sistema{% endblock %}
+                </p>
+            </div>
+
+            <div class="flex items-center gap-3">
+
+                <!-- Status geral -->
+                <div x-data="statusBar()" x-init="init()" x-cloak
+                     class="flex items-center gap-2 bg-gray-800 px-3 py-1.5 rounded-lg">
+                    <div :class="online ? 'bg-green-400 animate-pulse-slow' : 'bg-red-400'"
+                         class="w-2 h-2 rounded-full"></div>
+                    <span x-text="online ? 'Todos serviços ok' : 'Serviços offline'"
+                          class="text-xs text-gray-300"></span>
+                </div>
+
+                <!-- Botão API -->
+                <a href="/docs" target="_blank"
+                   class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs
+                          px-3 py-1.5 rounded-lg transition-colors border border-gray-700">
+                    <i class="fas fa-code mr-1.5"></i>Swagger UI
+                </a>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <main class="flex-1 p-6">
+            {% block content %}{% endblock %}
+        </main>
+
+        <!-- Footer -->
+        <footer class="border-t border-gray-800 px-6 py-3 flex items-center justify-between">
+            <span class="text-xs text-gray-600">
+                Web Crawler — Projeto de Portfólio
+            </span>
+            <span class="text-xs text-gray-600">
+                FastAPI · MongoDB · ElasticSearch · RabbitMQ
+            </span>
+        </footer>
+    </div>
+
+    <!-- Scripts globais -->
+    <script>
+        function statusBar() {
+            return {
+                online: false,
+                async init() {
+                    await this.check();
+                    setInterval(() => this.check(), 30000);
+                },
+                async check() {
+                    try {
+                        const res = await fetch('/api/v1/health');
+                        const data = await res.json();
+                        this.online = data.status === 'ok';
+                    } catch {
+                        this.online = false;
+                    }
+                }
+            }
+        }
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

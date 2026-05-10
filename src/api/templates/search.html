@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block title %}Busca — Web Crawler{% endblock %}
+{% block page_title %}Busca{% endblock %}
+{% block page_subtitle %}Pesquisa full-text nas páginas crawleadas{% endblock %}
+
+{% block content %}
+<div x-data="searchPage()" x-cloak>
+
+    <!-- Formulário de busca -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
+        <form @submit.prevent="search(1)" class="space-y-4">
+
+            <!-- Barra principal -->
+            <div class="relative">
+                <i class="fas fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2
+                           text-gray-500 text-sm"></i>
+                <input
+                    x-model="form.q"
+                    type="text"
+                    placeholder="Buscar páginas crawleadas..."
+                    class="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-4
+                           py-3 text-sm text-white placeholder-gray-600 focus:outline-none
+                           focus:border-blue-600 transition-colors" />
+                <button type="submit"
+                        :disabled="form.q.length < 2 || loading"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600
+                               hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
+                               text-white text-xs px-4 py-1.5 rounded-lg transition-colors
+                               font-medium">
+                    <i :class="loading
+                            ? 'fas fa-rotate-right animate-spin'
+                            : 'fas fa-search'"
+                       class="mr-1.5"></i>
+                    <span x-text="loading ? 'Buscando...' : 'Buscar'"></span>
+                </button>
+            </div>
+
+            <!-- Filtros -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1.5 font-medium">
+                        <i class="fas fa-globe mr-1"></i>Domínio
+                    </label>
+                    <input
+                        x-model="form.domain"
+                        type="text"
+                        placeholder="ex: python.org"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3
+                               py-2 text-sm text-white placeholder-gray-600 focus:outline-none
+                               focus:border-blue-600 transition-colors" />
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1.5 font-medium">
+                        <i class="fas fa-language mr-1"></i>Idioma
+                    </label>
+                    <input
+                        x-model="form.lang"
+                        type="text"
+                        placeholder="ex: pt-BR, en"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3
+                               py-2 text-sm text-white placeholder-gray-600 focus:outline-none
+                               focus:border-blue-600 transition-colors" />
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1.5 font-medium">
+                        <i class="fas fa-list-ol mr-1"></i>Por página
+                    </label>
+                    <select
+                        x-model.number="form.size"
+                        @change="state !== 'idle' && search(1)"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3
+                               py-2 text-sm text-white focus:outline-none focus:border-blue-600
+                               transition-colors">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Estado: idle -->
+    <template x-if="state === 'idle'">
+        <div class="flex flex-col items-center justify-center py-20 text-center">
+            <div class="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mb-4">
+                <i class="fas fa-magnifying-glass text-gray-600 text-2xl"></i>
+            </div>
+            <p class="text-sm text-gray-400 mb-1">Faça uma busca para ver os resultados</p>
+            <p class="text-xs text-gray-600">
+                Use filtros de domínio e idioma para refinar os resultados
+            </p>
+        </div>
+    </template>
+
+    <!-- Estado: loading -->
+    <template x-if="state === 'loading'">
+        <div class="flex flex-col items-center justify-center py-20 text-center">
+            <i class="fas fa-rotate-right animate-spin text-blue-400 text-2xl mb-3"></i>
+            <p class="text-sm text-gray-500">Buscando...</p>
+        </div>
+    </template>
+
+    <!-- Estado: error -->
+    <template x-if="state === 'error'">
+        <div class="flex flex-col items-center justify-center py-20 text-center">
+            <div class="w-16 h-16 bg-red-900/20 rounded-2xl flex items-center justify-center mb-4">
+                <i class="fas fa-triangle-exclamation text-red-400 text-2xl"></i>
+            </div>
+            <p class="text-sm text-red-400 mb-1">Erro ao realizar a busca</p>
+            <p class="text-xs text-gray-600" x-text="errorMsg"></p>
+        </div>
+    </template>
+
+    <!-- Estado: empty -->
+    <template x-if="state === 'empty'">
+        <div class="flex flex-col items-center justify-center py-20 text-center">
+            <div class="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mb-4">
+                <i class="fas fa-inbox text-gray-600 text-2xl"></i>
+            </div>
+            <p class="text-sm text-gray-400 mb-1">Nenhum resultado encontrado</p>
+            <p class="text-xs text-gray-600">
+                Tente um termo diferente ou remova os filtros
+            </p>
+        </div>
+    </template>
+
+    <!-- Resultados -->
+    <template x-if="state === 'results'">
+        <div>
+
+            <!-- Cabeçalho dos resultados -->
+            <div class="flex items-center justify-between mb-4">
+                <p class="text-sm text-gray-400">
+                    <span class="text-white font-semibold" x-text="response.total"></span>
+                    resultado<span x-show="response.total !== 1">s</span>
+                    para
+                    <span class="text-blue-400 font-medium"
+                          x-text="`&quot;${response.query}&quot;`"></span>
+                    <span class="text-gray-600 ml-2"
+                          x-text="`— página ${response.page} de ${response.total_pages}`"></span>
+                </p>
+                <button @click="clear()"
+                        class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+                    <i class="fas fa-xmark mr-1"></i>Limpar
+                </button>
+            </div>
+
+            <!-- Lista de resultados -->
+            <div class="space-y-3 mb-6">
+                <template x-for="result in response.results" :key="result.url">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5
+                                hover:border-blue-800 transition-colors group">
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="flex-1 min-w-0">
+
+                                <!-- Título -->
+                                <a :href="result.url" target="_blank"
+                                   class="text-blue-400 hover:text-blue-300 font-medium
+                                          text-sm leading-tight transition-colors
+                                          group-hover:underline line-clamp-1"
+                                   x-text="result.title || 'Sem título'"></a>
+
+                                <!-- URL -->
+                                <p class="text-xs text-gray-600 font-mono mt-0.5 truncate"
+                                   x-text="result.url"></p>
+
+                                <!-- Descrição -->
+                                <p class="text-sm text-gray-400 mt-2 leading-relaxed line-clamp-2"
+                                   x-text="result.description || 'Sem descrição disponível.'"></p>
+
+                                <!-- Tags -->
+                                <div class="flex flex-wrap items-center gap-2 mt-3">
+                                    <span class="inline-flex items-center gap-1 bg-gray-800
+                                                 text-gray-400 text-xs px-2 py-0.5 rounded-md">
+                                        <i class="fas fa-globe text-xs"></i>
+                                        <span x-text="result.domain"></span>
+                                    </span>
+                                    <template x-if="result.lang">
+                                        <span class="inline-flex items-center gap-1 bg-gray-800
+                                                     text-gray-400 text-xs px-2 py-0.5 rounded-md">
+                                            <i class="fas fa-language text-xs"></i>
+                                            <span x-text="result.lang"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="result.crawled_at">
+                                        <span class="inline-flex items-center gap-1 bg-gray-800
+                                                     text-gray-400 text-xs px-2 py-0.5 rounded-md">
+                                            <i class="fas fa-clock text-xs"></i>
+                                            <span x-text="formatDate(result.crawled_at)"></span>
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Score + Link -->
+                            <div class="flex-shrink-0 text-right">
+                                <div class="bg-blue-600/10 border border-blue-900 rounded-lg
+                                            px-3 py-2 text-center min-w-[60px]">
+                                    <p class="text-sm font-bold text-blue-400"
+                                       x-text="result.score.toFixed(2)"></p>
+                                    <p class="text-xs text-gray-600">score</p>
+                                </div>
+                                <a :href="result.url" target="_blank"
+                                   class="mt-2 flex items-center justify-center gap-1
+                                          text-xs text-gray-600 hover:text-gray-400
+                                          transition-colors">
+                                    <i class="fas fa-external-link-alt"></i>Abrir
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Paginação -->
+            <div x-show="response.total_pages > 1"
+                 class="flex items-center justify-center gap-1">
+
+                <!-- Primeira -->
+                <button @click="search(1)"
+                        :disabled="response.page === 1"
+                        class="w-8 h-8 rounded-lg text-xs flex items-center justify-center
+                               transition-colors disabled:opacity-30 disabled:cursor-not-allowed
+                               bg-gray-800 hover:bg-gray-700 text-gray-400">
+                    <i class="fas fa-angles-left"></i>
+                </button>
+
+                <!-- Anterior -->
+                <button @click="search(response.page - 1)"
+                        :disabled="response.page === 1"
+                        class="w-8 h-8 rounded-lg text-xs flex items-center justify-center
+                               transition-colors disabled:opacity-30 disabled:cursor-not-allowed
+                               bg-gray-800 hover:bg-gray-700 text-gray-400">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+
+                <!-- Páginas numeradas -->
+                <template x-for="p in pageRange" :key="p">
+                    <button @click="p !== '…' && search(p)"
+                            :disabled="p === '…'"
+                            :class="p === response.page
+                                ? 'bg-blue-600 text-white border border-blue-500'
+                                : p === '…'
+                                    ? 'cursor-default text-gray-600'
+                                    : 'bg-gray-800 hover:bg-gray-700 text-gray-400'"
+                            class="w-8 h-8 rounded-lg text-xs flex items-center
+                                   justify-center transition-colors font-medium"
+                            x-text="p">
+                    </button>
+                </template>
+
+                <!-- Próxima -->
+                <button @click="search(response.page + 1)"
+                        :disabled="response.page === response.total_pages"
+                        class="w-8 h-8 rounded-lg text-xs flex items-center justify-center
+                               transition-colors disabled:opacity-30 disabled:cursor-not-allowed
+                               bg-gray-800 hover:bg-gray-700 text-gray-400">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+
+                <!-- Última -->
+                <button @click="search(response.total_pages)"
+                        :disabled="response.page === response.total_pages"
+                        class="w-8 h-8 rounded-lg text-xs flex items-center justify-center
+                               transition-colors disabled:opacity-30 disabled:cursor-not-allowed
+                               bg-gray-800 hover:bg-gray-700 text-gray-400">
+                    <i class="fas fa-angles-right"></i>
+                </button>
+            </div>
+
+            <!-- Info da paginação -->
+            <p x-show="response.total_pages > 1"
+               class="text-center text-xs text-gray-600 mt-3"
+               x-text="`Mostrando ${((response.page - 1) * response.size) + 1}–
+                        ${Math.min(response.page * response.size, response.total)}
+                        de ${response.total} resultados`">
+            </p>
+
+        </div>
+    </template>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function searchPage() {
+    return {
+        state: 'idle',   // idle | loading | results | empty | error
+        response: null,
+        errorMsg: '',
+        loading: false,
+        form: { q: '', domain: '', lang: '', size: 10 },
+
+        // Computed: range de páginas com ellipsis
+        get pageRange() {
+            if (!this.response) return [];
+            const { page, total_pages: total } = this.response;
+            if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+
+            const pages = new Set([1, total, page]);
+            for (let d = -2; d <= 2; d++) {
+                const p = page + d;
+                if (p >= 1 && p <= total) pages.add(p);
+            }
+
+            const sorted = [...pages].sort((a, b) => a - b);
+            const result = [];
+            let prev = 0;
+            for (const p of sorted) {
+                if (p - prev > 1) result.push('…');
+                result.push(p);
+                prev = p;
+            }
+            return result;
+        },
+
+        async search(page = 1) {
+            if (this.form.q.length < 2) return;
+
+            this.loading = true;
+            this.state = 'loading';
+
+            try {
+                const params = new URLSearchParams({
+                    q:    this.form.q,
+                    size: this.form.size,
+                    page,
+                });
+                if (this.form.domain) params.append('domain', this.form.domain);
+                if (this.form.lang)   params.append('lang',   this.form.lang);
+
+                const res = await fetch(`/api/v1/search?${params.toString()}`);
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    this.errorMsg = err.detail ?? 'Erro desconhecido.';
+                    this.state = 'error';
+                    return;
+                }
+
+                const data = await res.json();
+                this.response = data;
+                this.state = data.total > 0 ? 'results' : 'empty';
+
+                // Scroll ao topo dos resultados
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            } catch (e) {
+                this.errorMsg = 'Erro de conexão com a API.';
+                this.state = 'error';
+                console.error('Erro na busca:', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        clear() {
+            this.state = 'idle';
+            this.response = null;
+            this.form = { q: '', domain: '', lang: '', size: 10 };
+        },
+
+        formatDate(iso) {
+            if (!iso) return '';
+            try {
+                return new Date(iso).toLocaleDateString('pt-BR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                });
+            } catch { return iso; }
+        },
+    }
+}
+</script>
+{% endblock %}

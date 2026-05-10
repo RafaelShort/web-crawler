@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Serviços — Web Crawler{% endblock %}
+{% block page_title %}Serviços{% endblock %}
+{% block page_subtitle %}Status e saúde da infraestrutura{% endblock %}
+
+{% block content %}
+<div x-data="servicesPage()" x-init="init()" x-cloak>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-2">
+            <div class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
+            <span class="text-xs text-gray-500">
+                Atualizado <span x-text="lastUpdate"></span>
+            </span>
+        </div>
+        <button @click="refresh()"
+                class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300
+                       px-3 py-1.5 rounded-lg transition-colors border border-gray-700">
+            <i class="fas fa-rotate-right mr-1.5" :class="loading ? 'animate-spin' : ''"></i>
+            Atualizar
+        </button>
+    </div>
+
+    <!-- Banner de status geral -->
+    <div :class="allOk
+            ? 'bg-green-900/20 border-green-800'
+            : 'bg-red-900/20 border-red-800'"
+         class="rounded-xl border p-4 mb-6 flex items-center gap-4">
+        <div :class="allOk ? 'bg-green-600/20' : 'bg-red-600/20'"
+             class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0">
+            <i :class="allOk
+                ? 'fas fa-circle-check text-green-400'
+                : 'fas fa-triangle-exclamation text-red-400'"
+               class="text-xl"></i>
+        </div>
+        <div class="flex-1">
+            <p :class="allOk ? 'text-green-300' : 'text-red-300'"
+               class="font-semibold text-sm"
+               x-text="allOk
+                   ? 'Todos os serviços estão operacionais'
+                   : 'Um ou mais serviços com problema'">
+            </p>
+            <p class="text-xs text-gray-500 mt-0.5"
+               x-text="`${onlineCount} de ${totalCount} serviços online`">
+            </p>
+        </div>
+        <!-- Contador de serviços online -->
+        <div class="text-right">
+            <p class="text-2xl font-bold"
+               :class="allOk ? 'text-green-400' : 'text-red-400'"
+               x-text="`${onlineCount}/${totalCount}`">
+            </p>
+            <p class="text-xs text-gray-500">online</p>
+        </div>
+    </div>
+
+    <!-- Cards dos serviços -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <template x-for="[name, svc] in Object.entries(services)" :key="name">
+            <div :class="svc.status === 'ok'
+                    ? 'border-gray-800 hover:border-green-800'
+                    : 'border-red-900 hover:border-red-700'"
+                 class="bg-gray-900 border rounded-xl p-5 transition-colors">
+
+                <!-- Cabeçalho do card -->
+                <div class="flex items-center justify-between mb-5">
+                    <div class="flex items-center gap-3">
+                        <div :class="svc.status === 'ok' ? iconBg(name) : 'bg-red-600/15'"
+                             class="w-10 h-10 rounded-xl flex items-center justify-center">
+                            <i :class="[
+                                   iconClass(name),
+                                   svc.status === 'ok' ? iconColor(name) : 'text-red-400'
+                               ]"
+                               class="text-sm"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-white capitalize"
+                               x-text="name"></p>
+                            <p class="text-xs text-gray-500"
+                               x-text="serviceLabel(name)"></p>
+                        </div>
+                    </div>
+                    <div :class="svc.status === 'ok'
+                            ? 'bg-green-500/10 text-green-400 border-green-900'
+                            : 'bg-red-500/10 text-red-400 border-red-900'"
+                         class="flex items-center gap-1.5 px-2.5 py-1 rounded-full
+                                text-xs font-medium border">
+                        <div :class="svc.status === 'ok'
+                                ? 'bg-green-400 animate-pulse'
+                                : 'bg-red-400'"
+                             class="w-1.5 h-1.5 rounded-full"></div>
+                        <span x-text="svc.status === 'ok' ? 'Online' : 'Offline'"></span>
+                    </div>
+                </div>
+
+                <!-- Detalhes -->
+                <div class="space-y-2.5">
+                    <template x-if="svc.version">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-500">Versão</span>
+                            <span class="text-xs font-mono bg-gray-800 text-blue-400
+                                         px-2 py-0.5 rounded"
+                                  x-text="`v${svc.version}`"></span>
+                        </div>
+                    </template>
+
+                    <template x-if="svc.uri">
+                        <div class="flex justify-between items-center gap-2">
+                            <span class="text-xs text-gray-500 flex-shrink-0">URI</span>
+                            <span class="text-xs font-mono text-gray-400 truncate text-right"
+                                  x-text="svc.uri"></span>
+                        </div>
+                    </template>
+
+                    <!-- Erro detalhado -->
+                    <template x-if="svc.status !== 'ok' && svc.detail">
+                        <div class="mt-3 bg-red-900/20 border border-red-900 rounded-lg p-3">
+                            <p class="text-xs text-red-400 font-semibold mb-1.5">
+                                <i class="fas fa-triangle-exclamation mr-1.5"></i>Detalhe do erro
+                            </p>
+                            <p class="text-xs text-gray-400 font-mono break-all leading-relaxed"
+                               x-text="svc.detail"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Estado de carregamento -->
+    <template x-if="Object.keys(services).length === 0 && loading">
+        <div class="flex flex-col items-center justify-center py-20 text-center">
+            <i class="fas fa-rotate-right animate-spin text-blue-400 text-2xl mb-3"></i>
+            <p class="text-sm text-gray-500">Verificando serviços...</p>
+        </div>
+    </template>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function servicesPage() {
+    return {
+        services: {},
+        allOk: false,
+        onlineCount: 0,
+        totalCount: 0,
+        loading: false,
+        lastUpdate: '—',
+
+        async init() {
+            await this.refresh();
+            setInterval(() => this.refresh(), 15000);
+        },
+
+        async refresh() {
+            this.loading = true;
+            try {
+                const res = await fetch('/api/v1/health');
+                if (!res.ok) return;
+                const data = await res.json();
+                this.services = data.services;
+                this.allOk = data.status === 'ok';
+                const vals = Object.values(data.services);
+                this.totalCount = vals.length;
+                this.onlineCount = vals.filter(s => s.status === 'ok').length;
+                this.lastUpdate = new Date().toLocaleTimeString('pt-BR');
+            } catch (e) {
+                console.error('Erro ao buscar health:', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        iconClass(name) {
+            return {
+                mongodb:       'fas fa-database',
+                elasticsearch: 'fas fa-magnifying-glass',
+                rabbitmq:      'fas fa-arrows-spin',
+            }[name] ?? 'fas fa-server';
+        },
+
+        iconBg(name) {
+            return {
+                mongodb:       'bg-green-600/15',
+                elasticsearch: 'bg-yellow-600/15',
+                rabbitmq:      'bg-orange-600/15',
+            }[name] ?? 'bg-blue-600/15';
+        },
+
+        iconColor(name) {
+            return {
+                mongodb:       'text-green-400',
+                elasticsearch: 'text-yellow-400',
+                rabbitmq:      'text-orange-400',
+            }[name] ?? 'text-blue-400';
+        },
+
+        serviceLabel(name) {
+            return {
+                mongodb:       'Banco de dados',
+                elasticsearch: 'Motor de busca',
+                rabbitmq:      'Fila de mensagens',
+            }[name] ?? 'Serviço';
+        },
+    }
+}
+</script>
+{% endblock %}
