@@ -7,12 +7,9 @@ from src.crawler.engine import CrawlerEngine
 
 router = APIRouter()
 
-# Estado global do crawler 
 _engine: CrawlerEngine | None = None
 _task: asyncio.Task | None = None
 
-
-# Schemas
 
 class StartRequest(BaseModel):
     seed_urls: list[HttpUrl]
@@ -38,17 +35,12 @@ class StatusResponse(BaseModel):
     stats: dict | None = None
 
 
-# Helpers
-
 async def _run_crawler(engine: CrawlerEngine, seed_urls: list[str]):
-    """Executa o crawler em background."""
     try:
         await engine.start(seed_urls)
     except Exception as e:
         logger.error(f"Erro no crawler: {e}")
 
-
-# Endpoints
 
 @router.post(
     "/crawler/start",
@@ -59,13 +51,6 @@ async def start_crawler(
     request: StartRequest,
     background_tasks: BackgroundTasks,
 ):
-    """
-    Inicia o crawler com as URLs semente fornecidas.
-
-    - **seed_urls**: lista de URLs para iniciar o crawling
-    - **max_depth**: profundidade máxima de crawling (padrão: 3)
-    - **max_workers**: número de workers paralelos (padrão: 5)
-    """
     global _engine, _task
 
     if _task and not _task.done():
@@ -93,7 +78,6 @@ async def start_crawler(
     summary="Parar o crawler",
 )
 async def stop_crawler():
-    """Para o crawler em execução."""
     global _engine, _task
 
     if not _engine:
@@ -103,8 +87,14 @@ async def stop_crawler():
         )
 
     await _engine.shutdown()
-    logger.info("Crawler parado via API")
 
+    if _task and not _task.done():
+        _task.cancel()
+
+    _engine = None
+    _task = None
+
+    logger.info("Crawler parado via API")
     return {"message": "Crawler parado com sucesso"}
 
 
@@ -114,7 +104,6 @@ async def stop_crawler():
     summary="Status do crawler",
 )
 async def crawler_status():
-    """Retorna o status atual do crawler e suas estatísticas."""
     global _engine, _task
 
     if not _engine:
