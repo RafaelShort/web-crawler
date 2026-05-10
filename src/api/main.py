@@ -4,12 +4,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from src.api.routes import crawler, search, health, ui
+from src.storage.elastic_client import ElasticStorage
+from src.storage.mongo_client import MongoStorage
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 API iniciando...")
+    logger.info("API iniciando...")
+    app.state.elastic = ElasticStorage()
+    app.state.mongo = MongoStorage()
     yield
+    app.state.elastic.close()
+    app.state.mongo.close()
     logger.info("🛑 API encerrando...")
 
 
@@ -29,7 +35,6 @@ API REST para controle e consulta do Web Crawler.
     redoc_url="/redoc",
 )
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,10 +43,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routers API ───────────────────────────────────────────────────────────────
 app.include_router(health.router,  prefix="/api/v1", tags=["Health"])
 app.include_router(crawler.router, prefix="/api/v1", tags=["Crawler"])
 app.include_router(search.router,  prefix="/api/v1", tags=["Search"])
 
-# ── Router UI ─────────────────────────────────────────────────────────────────
-app.include_router(ui.router)  # ← sem prefixo, captura o "/"
+app.include_router(ui.router)
