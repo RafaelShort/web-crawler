@@ -1,16 +1,11 @@
 from math import ceil
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from pydantic import BaseModel
 from loguru import logger
 
-from src.storage.elastic_client import ElasticStorage
-from src.storage.mongo_client import MongoStorage
-
 router = APIRouter()
 
-
-# Schemas
 
 class SearchResult(BaseModel):
     url: str
@@ -24,14 +19,12 @@ class SearchResult(BaseModel):
 
 class SearchResponse(BaseModel):
     query: str
-    total: int          # total de hits no ES
-    page: int           # página atual
-    size: int           # resultados por página
-    total_pages: int    # total de páginas
+    total: int
+    page: int
+    size: int
+    total_pages: int
     results: list[SearchResult]
 
-
-# Endpoints
 
 @router.get(
     "/search",
@@ -39,25 +32,17 @@ class SearchResponse(BaseModel):
     summary="Busca full-text nas páginas crawleadas",
 )
 async def search(
+    request: Request,
     q: str = Query(..., min_length=2, description="Termo de busca"),
     domain: str | None = Query(None, description="Filtrar por domínio"),
     lang: str | None = Query(None, description="Filtrar por idioma (ex: pt-BR, en)"),
     size: int = Query(10, ge=1, le=50, description="Resultados por página"),
     page: int = Query(1, ge=1, description="Número da página"),
 ):
-    """
-    Busca full-text com paginação nas páginas crawleadas.
-
-    - **q**: termo de busca (mínimo 2 caracteres)
-    - **domain**: filtrar por domínio
-    - **lang**: filtrar por idioma 
-    - **size**: resultados por página (1-50)
-    - **page**: número da página (começa em 1)
-    """
     try:
         from_ = (page - 1) * size
 
-        elastic = ElasticStorage()
+        elastic = request.app.state.elastic
         raw_results, total = elastic.search(
             query=q,
             domain=domain,
@@ -65,7 +50,6 @@ async def search(
             size=size,
             from_=from_,
         )
-        elastic.close()
 
         results = [
             SearchResult(
@@ -99,19 +83,13 @@ async def search(
     summary="Listar páginas de um domínio",
 )
 async def list_pages(
+    request: Request,
     domain: str,
     limit: int = Query(10, ge=1, le=100),
 ):
-    """
-    Lista as páginas crawleadas de um domínio específico.
-
-    - **domain**: domínio a consultar
-    - **limit**: número máximo de resultados (1-100)
-    """
     try:
-        mongo = MongoStorage()
+        mongo = request.app.state.mongo
         pages = mongo.get_pages_by_domain(domain=domain, limit=limit)
-        mongo.close()
 
         return {
             "domain": domain,
